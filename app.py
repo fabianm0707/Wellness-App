@@ -1097,7 +1097,7 @@ def main():
                  style="height:80px;width:auto;filter:drop-shadow(0 0 12px rgba(0,212,255,0.4));">
             <div>
                 <div style="color:white;font-size:28px;font-weight:900;letter-spacing:1px;">
-                    Leones del Norte FC
+                    Leones FC
                 </div>
                 <div style="color:#00d4ff;font-size:13px;font-weight:600;letter-spacing:2px;margin-top:4px;">
                     PANEL DE BIENESTAR · RECUPERACIÓN · PREPARACIÓN
