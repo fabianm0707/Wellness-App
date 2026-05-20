@@ -755,6 +755,330 @@ def render_advanced_analytics(df: pd.DataFrame):
 
 
 # ─────────────────────────────────────────────
+# Helper functions for insights tab
+
+def calc_days_since_last_entry(df: pd.DataFrame) -> pd.DataFrame:
+    max_date = df["date"].max()
+    last     = df.groupby("player")["date"].max().reset_index()
+    last["Días Sin Registro"] = (max_date - last["date"]).dt.days
+    last.columns = ["Jugador", "Último Registro", "Días Sin Registro"]
+    last["Último Registro"] = last["Último Registro"].dt.strftime("%Y-%m-%d")
+    return last.sort_values("Días Sin Registro", ascending=False)
+
+
+def calc_wellness_ranking(df: pd.DataFrame) -> pd.DataFrame:
+    avg = df.groupby("player")["wellness"].mean().reset_index()
+    avg.columns = ["Jugador", "Bienestar Promedio"]
+    p25 = avg["Bienestar Promedio"].quantile(0.25)
+    p75 = avg["Bienestar Promedio"].quantile(0.75)
+    def tier(v):
+        if v <= p25:  return "🥇 Top 25%"
+        if v <= p75:  return "🥈 Medio 50%"
+        return "🥉 Bottom 25%"
+    avg["Ranking"]           = avg["Bienestar Promedio"].apply(tier)
+    avg["Bienestar Promedio"] = avg["Bienestar Promedio"].round(2)
+    return avg.sort_values("Bienestar Promedio")
+
+
+def calc_pct_alert(df: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for player in df["player"].unique():
+        pdf   = df[df["player"] == player]
+        total = pdf["date"].nunique()
+        alert = pdf[pdf["wellness"] >= ALERT_THRESHOLD]["date"].nunique()
+        rows.append({"Jugador": player, "% Días en Alerta": round(alert / total * 100, 1), "Total Días": total})
+    return pd.DataFrame(rows).sort_values("% Días en Alerta", ascending=False)
+
+
+def predict_next_day(df: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for player in df["player"].unique():
+        pdf   = df[df["player"] == player].sort_values("date")
+        daily = pdf.groupby("date")["wellness"].mean()
+        if len(daily) < 3:
+            continue
+        last5     = daily.tail(5).mean()
+        trend_val = daily.tail(3).iloc[-1] - daily.tail(3).iloc[0]
+        predicted = round(min(7, max(1, last5 + trend_val * 0.2)), 2)
+        if trend_val > 0.3:   trend_lbl = "↑ Empeorando"
+        elif trend_val < -0.3: trend_lbl = "↓ Mejorando"
+        else:                  trend_lbl = "→ Estable"
+        rows.append({"Jugador": player, "Predicción Mañana": predicted,
+                     "Promedio Últ. 5d": round(last5, 2), "Tendencia": trend_lbl})
+    return pd.DataFrame(rows).sort_values("Predicción Mañana", ascending=False)
+
+
+def calc_fatigue_cycle(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["week"] = df["date"].dt.isocalendar().week.astype(int)
+    df["year"] = df["date"].dt.isocalendar().year.astype(int)
+    df["week_label"] = df["date"].dt.strftime("S%W")
+    return df.groupby("week_label")[["fatigue", "doms", "stress", "sleep", "wellness"]].mean().reset_index()
+
+
+def calc_lag_correlation(df: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for player in df["player"].unique():
+        pdf   = df[df["player"] == player].sort_values("date")
+        daily = pdf.groupby("date")[["stress", "fatigue"]].mean()
+        if len(daily) < 5:
+            continue
+        corr = pd.Series(daily["stress"].values[:-1]).corr(pd.Series(daily["fatigue"].values[1:]))
+        if pd.notna(corr):
+            rows.append({"Jugador": player, "Correlación Estrés→Fatiga (día+1)": round(corr, 2)})
+    return pd.DataFrame(rows).sort_values("Correlación Estrés→Fatiga (día+1)", ascending=False)
+
+
+def render_insights(df: pd.DataFrame):
+    st.markdown("## 🔍 Insights del Plantel")
+    df = compute_readiness(df)
+
+    # ════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("## 📡 Sección 1 — Monitoreo del Plantel")
+    st.markdown("---")
+
+    # 1a. Days since last entry
+    st.markdown("### 🗓️ Días Desde el Último Registro")
+    st.caption("Jugadores que llevan más días sin registrar su bienestar. Posible lesión, ausencia o falta de adherencia.")
+    dsl = calc_days_since_last_entry(df)
+    missing = dsl[dsl["Días Sin Registro"] >= 3]
+    c1, c2 = st.columns(2)
+    with c1: metric_card("Sin Registro +3 días", str(len(missing)), RED if len(missing) > 0 else GREEN, "📵")
+    with c2: metric_card("Registraron Hoy", str((dsl["Días Sin Registro"] == 0).sum()), CYAN, "✅")
+    st.markdown("<br>", unsafe_allow_html=True)
+    fig_dsl = px.bar(dsl.head(20), x="Días Sin Registro", y="Jugador", orientation="h",
+                     color="Días Sin Registro",
+                     color_continuous_scale=[[0, GREEN], [0.3, YELLOW], [0.6, ORANGE], [1, RED]],
+                     title="Días desde el último registro (Top 20)")
+    fig_dsl.update_layout(coloraxis_showscale=False,
+                           height=max(300, len(dsl.head(20)) * 26),
+                           yaxis={"categoryorder": "total ascending"})
+    st.plotly_chart(dark_chart(fig_dsl), use_container_width=True)
+    with st.expander("Ver tabla completa"):
+        st.dataframe(dsl, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # 1b. Wellness ranking
+    st.markdown("### 🏅 Ranking de Bienestar del Plantel")
+    st.caption("Clasifica a los jugadores en Top 25%, Medio 50% y Bottom 25% según su bienestar promedio histórico.")
+    wr = calc_wellness_ranking(df)
+    top   = wr[wr["Ranking"].str.contains("Top")]
+    mid   = wr[wr["Ranking"].str.contains("Medio")]
+    bot   = wr[wr["Ranking"].str.contains("Bottom")]
+    r1, r2, r3 = st.columns(3)
+    with r1: metric_card("Top 25%",    str(len(top)), GREEN,  "🥇")
+    with r2: metric_card("Medio 50%",  str(len(mid)), YELLOW, "🥈")
+    with r3: metric_card("Bottom 25%", str(len(bot)), RED,    "🥉")
+    st.markdown("<br>", unsafe_allow_html=True)
+    fig_wr = px.bar(wr, x="Bienestar Promedio", y="Jugador", orientation="h",
+                    color="Bienestar Promedio",
+                    color_continuous_scale=[[0, GREEN], [0.4, YELLOW], [0.7, ORANGE], [1, RED]],
+                    range_color=[1, 7],
+                    title="Ranking de Bienestar Promedio del Plantel")
+    fig_wr.update_layout(coloraxis_showscale=False,
+                          height=max(420, len(wr) * 22),
+                          yaxis={"categoryorder": "total ascending"})
+    st.plotly_chart(dark_chart(fig_wr), use_container_width=True)
+
+    st.divider()
+
+    # 1c. % days in alert
+    st.markdown("### 🚨 Porcentaje de Días en Alerta por Jugador")
+    st.caption("Qué porcentaje del tiempo total cada jugador estuvo con bienestar ≥ 5.")
+    pa = calc_pct_alert(df)
+    fig_pa = px.bar(pa, x="% Días en Alerta", y="Jugador", orientation="h",
+                    color="% Días en Alerta",
+                    color_continuous_scale=[[0, GREEN], [0.4, YELLOW], [0.7, ORANGE], [1, RED]],
+                    title="% del Tiempo con Bienestar en Zona de Alerta")
+    fig_pa.update_layout(coloraxis_showscale=False,
+                          height=max(420, len(pa) * 22),
+                          yaxis={"categoryorder": "total ascending"})
+    st.plotly_chart(dark_chart(fig_pa), use_container_width=True)
+
+    # ════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("## 🔮 Sección 2 — Predicciones")
+    st.markdown("---")
+
+    st.markdown("### 📈 Predicción de Bienestar para Mañana")
+    st.caption("Basado en el promedio de los últimos 5 días y la tendencia reciente de cada jugador. Referencial, no determinístico.")
+    pred = predict_next_day(df)
+    if not pred.empty:
+        c1, c2, c3 = st.columns(3)
+        good_pred = (pred["Predicción Mañana"] <= 3.5).sum()
+        warn_pred = ((pred["Predicción Mañana"] > 3.5) & (pred["Predicción Mañana"] <= 5)).sum()
+        bad_pred  = (pred["Predicción Mañana"] > 5).sum()
+        with c1: metric_card("Predicción Buena", str(good_pred), GREEN,  "✅")
+        with c2: metric_card("Predicción Regular", str(warn_pred), YELLOW, "⚠️")
+        with c3: metric_card("Predicción Alerta", str(bad_pred), RED,   "🚨")
+        st.markdown("<br>", unsafe_allow_html=True)
+        fig_pred = px.bar(pred, x="Predicción Mañana", y="Jugador", orientation="h",
+                          color="Predicción Mañana",
+                          color_continuous_scale=[[0, GREEN], [0.4, YELLOW], [0.7, ORANGE], [1, RED]],
+                          range_color=[1, 7],
+                          title="Predicción de Bienestar para Mañana",
+                          hover_data=["Promedio Últ. 5d", "Tendencia"])
+        fig_pred.update_layout(coloraxis_showscale=False,
+                                height=max(420, len(pred) * 22),
+                                yaxis={"categoryorder": "total ascending"})
+        st.plotly_chart(dark_chart(fig_pred), use_container_width=True)
+        with st.expander("Ver tabla de predicciones"):
+            st.dataframe(pred, use_container_width=True, hide_index=True)
+
+    # ════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("## ⚔️ Sección 3 — Comparación de Jugadores")
+    st.markdown("---")
+
+    st.markdown("### 🔄 Comparación Entre Dos Jugadores")
+    players = sorted(df["player"].dropna().unique())
+    col1, col2 = st.columns(2)
+    with col1: p1 = st.selectbox("Jugador 1", players, key="cmp1")
+    with col2: p2 = st.selectbox("Jugador 2", players, index=1, key="cmp2")
+
+    if p1 != p2:
+        p1df = df[df["player"] == p1].groupby("date")[["wellness", "fatigue", "doms", "stress", "sleep"]].mean().reset_index()
+        p2df = df[df["player"] == p2].groupby("date")[["wellness", "fatigue", "doms", "stress", "sleep"]].mean().reset_index()
+        p1df["Jugador"] = p1
+        p2df["Jugador"] = p2
+        cmp  = pd.concat([p1df, p2df])
+        for metric, label in [("wellness","Bienestar"),("fatigue","Fatiga"),("doms","DOMS"),("stress","Estrés"),("sleep","Sueño")]:
+            sub = cmp[["date","Jugador",metric]].copy()
+            sub.columns = ["Fecha","Jugador","Valor"]
+            fig_c = px.line(sub, x="Fecha", y="Valor", color="Jugador", markers=True,
+                            title=label,
+                            color_discrete_sequence=[CYAN, ORANGE])
+            fig_c.update_layout(yaxis_range=[1,7], height=220,
+                                 margin=dict(t=35,b=10), legend=dict(orientation="h", y=1.15))
+            st.plotly_chart(dark_chart(fig_c, 220), use_container_width=True)
+    else:
+        st.warning("Selecciona dos jugadores diferentes.")
+
+    # ════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("## 📊 Sección 4 — Patrones del Equipo")
+    st.markdown("---")
+
+    # Fatigue cycle
+    st.markdown("### 🔄 Ciclo de Fatiga Semanal del Equipo")
+    st.caption("¿Hay semanas de mayor carga donde la fatiga pica consistentemente? Útil para planificar microciclos.")
+    fc = calc_fatigue_cycle(df)
+    fc_m = fc.melt(id_vars="week_label", var_name="Métrica", value_name="Promedio")
+    fc_m["Métrica"] = fc_m["Métrica"].map(
+        {"fatigue":"Fatiga","doms":"DOMS","stress":"Estrés","sleep":"Sueño","wellness":"Bienestar"})
+    fig_fc = px.line(fc_m[fc_m["Métrica"]=="Fatiga"], x="week_label", y="Promedio",
+                     markers=True, title="Ciclo de Fatiga del Equipo por Semana",
+                     labels={"week_label":"Semana","Promedio":"Fatiga Promedio"},
+                     color_discrete_sequence=[ORANGE])
+    fig_fc.update_traces(line=dict(width=3), marker=dict(size=8))
+    fig_fc.update_layout(yaxis_range=[1,7])
+    st.plotly_chart(dark_chart(fig_fc, 300), use_container_width=True)
+
+    fig_fc2 = px.line(fc_m[fc_m["Métrica"]!="Bienestar"], x="week_label", y="Promedio",
+                      color="Métrica", markers=True,
+                      title="Todas las Métricas por Semana",
+                      labels={"week_label":"Semana"},
+                      color_discrete_sequence=[RED, ORANGE, YELLOW, CYAN])
+    fig_fc2.update_layout(yaxis_range=[1,7])
+    st.plotly_chart(dark_chart(fig_fc2, 300), use_container_width=True)
+
+    st.divider()
+
+    # Worst day
+    st.markdown("### 📉 Peor Día Histórico por Jugador")
+    st.caption("El día en que cada jugador registró su mayor puntuación de bienestar (recuerda: mayor = peor).")
+    worst = df.loc[df.groupby("player")["wellness"].idxmax()][["player","date","wellness"]].copy()
+    worst.columns = ["Jugador","Fecha Peor Día","Peor Score"]
+    worst["Fecha Peor Día"] = worst["Fecha Peor Día"].dt.strftime("%Y-%m-%d")
+    worst["Peor Score"] = worst["Peor Score"].round(2)
+    worst = worst.sort_values("Peor Score", ascending=False)
+    fig_wd = px.bar(worst, x="Peor Score", y="Jugador", orientation="h",
+                    color="Peor Score",
+                    color_continuous_scale=[[0, YELLOW], [0.5, ORANGE], [1, RED]],
+                    range_color=[1, 7],
+                    title="Peor Score de Bienestar Registrado por Jugador",
+                    hover_data=["Fecha Peor Día"])
+    fig_wd.update_layout(coloraxis_showscale=False,
+                          height=max(420, len(worst) * 22),
+                          yaxis={"categoryorder": "total ascending"})
+    st.plotly_chart(dark_chart(fig_wd), use_container_width=True)
+
+    st.divider()
+
+    # Distribution
+    st.markdown("### 📊 Distribución de Scores de Bienestar")
+    st.caption("¿Cómo se distribuyen los registros del equipo? ¿Más días buenos o malos?")
+    fig_hist = px.histogram(df, x="wellness", nbins=14,
+                             color_discrete_sequence=[CYAN],
+                             title="Distribución de Todos los Scores de Bienestar del Equipo",
+                             labels={"wellness":"Score de Bienestar","count":"Frecuencia"})
+    fig_hist.update_layout(bargap=0.1)
+    st.plotly_chart(dark_chart(fig_hist, 320), use_container_width=True)
+
+    st.divider()
+
+    # Weekend syndrome
+    st.markdown("### 📅 Síndrome de Inicio de Semana")
+    st.caption("¿Los lunes el equipo llega con más DOMS y estrés que el resto de la semana?")
+    day_map = {"Monday":"Lunes","Tuesday":"Martes","Wednesday":"Miércoles",
+               "Thursday":"Jueves","Friday":"Viernes","Saturday":"Sábado","Sunday":"Domingo"}
+    day_order_es = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"]
+    df["dia_semana"] = df["date"].dt.day_name().map(day_map)
+    dow2 = df.groupby("dia_semana")[["doms","stress","fatigue","sleep"]].mean().reindex(day_order_es).reset_index()
+    dow2_m = dow2.melt(id_vars="dia_semana", var_name="Métrica", value_name="Promedio")
+    dow2_m["Métrica"] = dow2_m["Métrica"].map({"doms":"DOMS","stress":"Estrés","fatigue":"Fatiga","sleep":"Sueño"})
+    fig_wk = px.bar(dow2_m, x="dia_semana", y="Promedio", color="Métrica", barmode="group",
+                    title="Métricas Promedio por Día de la Semana",
+                    labels={"dia_semana":"Día","Promedio":"Score"},
+                    color_discrete_sequence=[RED, ORANGE, YELLOW, CYAN],
+                    category_orders={"dia_semana": day_order_es})
+    fig_wk.update_layout(yaxis_range=[1,7])
+    st.plotly_chart(dark_chart(fig_wk, 340), use_container_width=True)
+
+    # ════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("## 🔗 Sección 5 — Relaciones entre Métricas")
+    st.markdown("---")
+
+    # Lag correlation
+    st.markdown("### ⏱️ ¿El Estrés de Hoy Predice la Fatiga de Mañana?")
+    st.caption("Correlación entre el estrés de un día y la fatiga del día siguiente por jugador. Cercano a 1 = el estrés hoy predice más fatiga mañana.")
+    lc = calc_lag_correlation(df)
+    if not lc.empty:
+        high_corr = lc[lc["Correlación Estrés→Fatiga (día+1)"] >= 0.4]
+        metric_card("Jugadores con Alta Correlación Estrés→Fatiga",
+                    str(len(high_corr)), ORANGE, "⚡")
+        st.markdown("<br>", unsafe_allow_html=True)
+        fig_lc = px.bar(lc, x="Correlación Estrés→Fatiga (día+1)", y="Jugador", orientation="h",
+                        color="Correlación Estrés→Fatiga (día+1)",
+                        color_continuous_scale=[[0, CYAN], [0.5, YELLOW], [1, RED]],
+                        range_color=[-1, 1],
+                        title="Correlación: Estrés Hoy → Fatiga Mañana")
+        fig_lc.add_vline(x=0, line_color="#6b7a99", line_dash="dash")
+        fig_lc.update_layout(coloraxis_showscale=False,
+                              height=max(420, len(lc) * 22),
+                              yaxis={"categoryorder": "total ascending"})
+        st.plotly_chart(dark_chart(fig_lc), use_container_width=True)
+
+    st.divider()
+
+    # Full correlation heatmap per metric pair
+    st.markdown("### 🔗 Correlaciones Cruzadas de Todas las Métricas")
+    st.caption("Qué pasa con una métrica cuando otra sube. Rojo = mueven juntas, Azul = se mueven opuesto.")
+    corr_full = df[["fatigue","doms","stress","sleep","wellness","readiness","recovery"]].corr()
+    corr_full.index   = ["Fatiga","DOMS","Estrés","Sueño","Bienestar","Preparación","Recuperación"]
+    corr_full.columns = ["Fatiga","DOMS","Estrés","Sueño","Bienestar","Preparación","Recuperación"]
+    fig_cf = px.imshow(corr_full, text_auto=".2f",
+                       color_continuous_scale=[[0,CYAN],[0.5,CARD2],[1,RED]],
+                       range_color=[-1,1],
+                       title="Matriz de Correlación Completa")
+    fig_cf.update_traces(textfont=dict(color="white", size=12))
+    st.plotly_chart(dark_chart(fig_cf, 460), use_container_width=True)
+
+
+# ─────────────────────────────────────────────
 def main():
     st.set_page_config(
         page_title="Panel de Bienestar",
@@ -782,11 +1106,12 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Panel del Equipo",
         "👤 Perfil del Jugador",
         "🔋 Recuperación y Preparación",
         "🧠 Análisis Avanzado",
+        "🔍 Insights del Plantel",
     ])
 
     with tab1:
@@ -810,6 +1135,12 @@ def main():
     with tab4:
         try:
             render_advanced_analytics(load_data())
+        except Exception as e:
+            st.error(f"Error al cargar los datos: {e}")
+
+    with tab5:
+        try:
+            render_insights(load_data())
         except Exception as e:
             st.error(f"Error al cargar los datos: {e}")
 
