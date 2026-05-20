@@ -91,6 +91,7 @@ def inject_css():
 
 
 def metric_card(label: str, value: str, color: str = CYAN, icon: str = ""):
+    prefix = f"{icon}&nbsp;" if icon else ""
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,{CARD},{CARD2});
                 border-radius:14px;padding:22px 16px;
@@ -98,7 +99,7 @@ def metric_card(label: str, value: str, color: str = CYAN, icon: str = ""):
                 box-shadow:0 4px 20px rgba(0,0,0,0.4);margin:4px 0;">
         <div style="color:#6b7a99;font-size:11px;font-weight:700;
                     text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">
-            {icon}&nbsp;{label}
+            {prefix}{label}
         </div>
         <div style="color:white;font-size:30px;font-weight:900;
                     line-height:1;text-shadow:0 0 20px {color}44;">
@@ -196,7 +197,7 @@ def compute_readiness(df: pd.DataFrame) -> pd.DataFrame:
 
 # ─────────────────────────────────────────────
 def render_team_dashboard(df: pd.DataFrame):
-    st.markdown("## 📊 Panel del Equipo")
+    st.markdown("## Panel del Equipo")
 
     min_date  = df["date"].min().date()
     max_date  = df["date"].max().date()
@@ -219,10 +220,10 @@ def render_team_dashboard(df: pd.DataFrame):
     players_today = filtered[filtered["date"].dt.date == max_date]["player"].nunique()
 
     k1, k2, k3, k4 = st.columns(4)
-    with k1: metric_card("Bienestar Promedio", f"{avg_team:.2f} / 7", wellness_color(avg_team), "💚")
-    with k2: metric_card("Jugadores en Alerta", str(alerts), RED if alerts > 0 else GREEN, "🚨")
-    with k3: metric_card("Registros en el Período", str(submissions), CYAN, "📋")
-    with k4: metric_card("Jugadores Hoy", str(players_today), YELLOW, "👥")
+    with k1: metric_card("Bienestar Promedio", f"{avg_team:.2f} / 7", wellness_color(avg_team))
+    with k2: metric_card("Jugadores en Alerta", str(alerts), RED if alerts > 0 else GREEN)
+    with k3: metric_card("Registros en el Período", str(submissions), CYAN)
+    with k4: metric_card("Jugadores Hoy", str(players_today), YELLOW)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -258,7 +259,7 @@ def render_team_dashboard(df: pd.DataFrame):
     st.plotly_chart(dark_chart(fig3, max(420, len(pavg) * 22)), use_container_width=True)
 
     if alerts > 0:
-        st.markdown(f"### 🚨 Jugadores en Alerta &nbsp;_(puntuación ≥ {ALERT_THRESHOLD})_")
+        st.markdown(f"### Jugadores en Alerta _(puntuación ≥ {ALERT_THRESHOLD})_")
         adf = (filtered[filtered["wellness"] >= ALERT_THRESHOLD]
                .groupby("player")
                .agg(avg=("wellness", "mean"), last=("date", "max"), n=("wellness", "count"))
@@ -270,7 +271,7 @@ def render_team_dashboard(df: pd.DataFrame):
 
 # ─────────────────────────────────────────────
 def render_player_profile(df: pd.DataFrame):
-    st.markdown("## 👤 Perfil del Jugador")
+    st.markdown("## Perfil del Jugador")
 
     players  = sorted(df["player"].dropna().unique())
     selected = st.selectbox("Selecciona un Jugador", players)
@@ -286,9 +287,9 @@ def render_player_profile(df: pd.DataFrame):
     label = wellness_label(score)
 
     k1, k2, k3 = st.columns(3)
-    with k1: metric_card("Última Puntuación", f"{score:.2f}", color, "🎯")
-    with k2: metric_card("Estado", label, color, "📌")
-    with k3: metric_card("Total de Registros", str(len(pdf)), CYAN, "📅")
+    with k1: metric_card("Última Puntuación", f"{score:.2f}", color)
+    with k2: metric_card("Estado", label, color)
+    with k3: metric_card("Total de Registros", str(len(pdf)), CYAN)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -323,7 +324,7 @@ def render_player_profile(df: pd.DataFrame):
     fig_trend.update_layout(yaxis_range=[1, 7])
     st.plotly_chart(dark_chart(fig_trend, 300), use_container_width=True)
 
-    st.markdown("### Último Registro — Detalle")
+    st.markdown("### Detalle del Último Registro")
     cats   = ["Fatiga", "DOMS", "Estrés", "Sueño"]
     vals   = [last.get("fatigue", 0), last.get("doms", 0), last.get("stress", 0), last.get("sleep", 0)]
     fig_r  = go.Figure(go.Scatterpolar(
@@ -347,7 +348,7 @@ def render_player_profile(df: pd.DataFrame):
 
 # ─────────────────────────────────────────────
 def render_recovery_readiness(df: pd.DataFrame):
-    st.markdown("## 🔋 Recuperación y Preparación")
+    st.markdown("## Recuperación y Preparación")
 
     df       = compute_readiness(df)
     max_date = df["date"].max().date()
@@ -368,9 +369,9 @@ def render_recovery_readiness(df: pd.DataFrame):
         rest    = (ts["readiness"] > 4).sum()
 
         c1, c2, c3 = st.columns(3)
-        with c1: metric_card("Listos para Entrenar", str(ready), GREEN, "✅")
-        with c2: metric_card("Precaución", str(caution), YELLOW, "⚠️")
-        with c3: metric_card("Necesitan Descanso", str(rest), RED, "🛑")
+        with c1: metric_card("Listos para Entrenar", str(ready), GREEN)
+        with c2: metric_card("Precaución", str(caution), YELLOW)
+        with c3: metric_card("Necesitan Descanso", str(rest), RED)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -393,7 +394,7 @@ def render_recovery_readiness(df: pd.DataFrame):
 
     st.divider()
 
-    st.markdown("### 🗓️ Mapa de Preparación — Últimos 21 Días")
+    st.markdown("### Mapa de Preparación — Últimos 21 Días")
     cutoff   = pd.Timestamp(max_date) - timedelta(days=21)
     hdf      = df[df["date"] >= cutoff].copy()
     hdf["date_str"] = hdf["date"].dt.strftime("%m/%d")
@@ -409,7 +410,7 @@ def render_recovery_readiness(df: pd.DataFrame):
 
     st.divider()
 
-    st.markdown("### ⚡ Días Consecutivos en Alerta")
+    st.markdown("### Días Consecutivos en Alerta")
     consec = [{"Jugador": p, "Días Consecutivos": consecutive_alert_days(df[df["player"] == p])}
               for p in df["player"].unique()]
     consec = [r for r in consec if r["Días Consecutivos"] > 0]
@@ -428,7 +429,7 @@ def render_recovery_readiness(df: pd.DataFrame):
 
     st.divider()
 
-    st.markdown("### 📈 Tendencia de Recuperación del Equipo")
+    st.markdown("### Tendencia de Recuperación del Equipo")
     r_min         = df["date"].min().date()
     r_def_start   = max(r_min, max_date - timedelta(days=30))
     rc1, rc2      = st.columns(2)
@@ -454,7 +455,7 @@ def render_recovery_readiness(df: pd.DataFrame):
 
     st.divider()
 
-    st.markdown("### 😴 Impacto del Sueño en la Preparación")
+    st.markdown("### Impacto del Sueño en la Preparación")
     fig_s = px.scatter(df, x="sleep", y="readiness", color="player",
                        labels={"sleep": "Calidad del Sueño", "readiness": "Preparación", "player": "Jugador"},
                        title="Calidad del Sueño vs Preparación", opacity=0.7)
@@ -538,12 +539,12 @@ def calc_load_management(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def render_advanced_analytics(df: pd.DataFrame):
-    st.markdown("## 🧠 Análisis Avanzado — Vista del Cuerpo Técnico")
+    st.markdown("## Análisis Avanzado — Vista del Cuerpo Técnico")
     df = compute_readiness(df)
     max_date = df["date"].max().date()
 
     # ── 1. Team Readiness Score ──────────────────────────────
-    st.markdown("### 🎯 Puntuación de Preparación del Equipo")
+    st.markdown("### Puntuación de Preparación del Equipo")
     today_df   = df[df["date"].dt.date == max_date]
     if not today_df.empty:
         avg_ready  = today_df["readiness"].mean()
@@ -552,8 +553,8 @@ def render_advanced_analytics(df: pd.DataFrame):
         label_100  = "ALTO" if score_100 >= 65 else ("MEDIO" if score_100 >= 40 else "BAJO")
         c1, c2 = st.columns([1, 2])
         with c1:
-            metric_card("Preparación del Equipo Hoy", f"{score_100} / 100", bar_color, "🎯")
-            metric_card("Estado General", label_100, bar_color, "📊")
+            metric_card("Preparación del Equipo Hoy", f"{score_100} / 100", bar_color)
+            metric_card("Estado General", label_100, bar_color)
         with c2:
             fig_team = go.Figure(go.Indicator(
                 mode="gauge+number",
@@ -578,7 +579,7 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 2. Starting 11 Readiness ────────────────────────────
-    st.markdown("### ⚽ Preparación del Once Inicial")
+    st.markdown("### Preparación del Once Inicial")
     all_players = sorted(df["player"].dropna().unique())
     lineup = st.multiselect("Selecciona hasta 11 jugadores", all_players, max_selections=11)
     if lineup:
@@ -586,7 +587,7 @@ def render_advanced_analytics(df: pd.DataFrame):
         if not lineup_today.empty:
             lu_avg = lineup_today.groupby("player")[["readiness", "wellness"]].mean().reset_index()
             team_score = round(((7 - lu_avg["readiness"].mean()) / 6) * 100, 1)
-            metric_card("Preparación del Once", f"{team_score} / 100", wellness_color(lu_avg["wellness"].mean()), "⚽")
+            metric_card("Preparación del Once", f"{team_score} / 100", wellness_color(lu_avg["wellness"].mean()))
             st.markdown("<br>", unsafe_allow_html=True)
             for _, row in lu_avg.sort_values("readiness").iterrows():
                 col = readiness_color(row["readiness"])
@@ -607,22 +608,22 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 3. Load Management ──────────────────────────────────
-    st.markdown("### 📋 Gestión de Carga — Recomendaciones")
+    st.markdown("### Gestión de Carga — Recomendaciones")
     lm = calc_load_management(df)
     if not lm.empty:
         rest_count    = (lm["Recomendación"].str.contains("Descanso")).sum()
         monitor_count = (lm["Recomendación"].str.contains("Monitorear")).sum()
         ready_count   = (lm["Recomendación"].str.contains("Listo")).sum()
         r1, r2, r3 = st.columns(3)
-        with r1: metric_card("Descanso Recomendado", str(rest_count), RED, "🛑")
-        with r2: metric_card("Monitorear", str(monitor_count), YELLOW, "⚠️")
-        with r3: metric_card("Listos", str(ready_count), GREEN, "✅")
+        with r1: metric_card("Descanso Recomendado", str(rest_count), RED)
+        with r2: metric_card("Monitorear", str(monitor_count), YELLOW)
+        with r3: metric_card("Listos", str(ready_count), GREEN)
         st.markdown("<br>", unsafe_allow_html=True)
         st.dataframe(lm, use_container_width=True, hide_index=True)
     st.divider()
 
     # ── 4. Recovery Rate ────────────────────────────────────
-    st.markdown("### ⚡ Velocidad de Recuperación por Jugador")
+    st.markdown("### Velocidad de Recuperación por Jugador")
     st.caption("Caída promedio en el score de bienestar al día siguiente de estar en alerta. Mayor = se recupera más rápido.")
     rr = calc_recovery_rate(df)
     if not rr.empty:
@@ -640,7 +641,7 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 5. Overtraining Risk ────────────────────────────────
-    st.markdown("### 🔴 Riesgo de Sobreentrenamiento")
+    st.markdown("### Riesgo de Sobreentrenamiento")
     st.caption("Máximo de días consecutivos donde el jugador superó el promedio del equipo en Fatiga Y DOMS simultáneamente.")
     ot = calc_overtraining_risk(df)
     ot_risk = ot[ot["Días de Sobrecarga"] >= 3]
@@ -659,7 +660,7 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 6. Weekly Readiness Summary ─────────────────────────
-    st.markdown("### 📅 Resumen Semanal de Preparación")
+    st.markdown("### Resumen Semanal de Preparación")
     df["week"] = df["date"].dt.strftime("S%W/%y")
     weekly = df.groupby(["player", "week"])["readiness"].mean().reset_index()
     wpivot = weekly.pivot(index="player", columns="week", values="readiness")
@@ -675,7 +676,7 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 7. Day of Week Analysis ─────────────────────────────
-    st.markdown("### 📆 Bienestar Promedio por Día de la Semana")
+    st.markdown("### Bienestar Promedio por Día de la Semana")
     day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     day_es    = {"Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
                  "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"}
@@ -704,7 +705,7 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 8. Sleep Consistency ────────────────────────────────
-    st.markdown("### 😴 Consistencia del Sueño por Jugador")
+    st.markdown("### Consistencia del Sueño por Jugador")
     st.caption("Mayor inconsistencia = más variabilidad en la calidad del sueño. Tan perjudicial como dormir mal de forma constante.")
     sc = calc_sleep_consistency(df)
     fig_sc = px.scatter(sc, x="Sueño Promedio", y="Inconsistencia", text="Jugador",
@@ -719,7 +720,7 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 9. Stress Spikes ────────────────────────────────────
-    st.markdown("### ⚡ Picos de Estrés Detectados")
+    st.markdown("### Picos de Estrés Detectados")
     st.caption("Días donde el estrés de un jugador subió 2+ puntos respecto al día anterior.")
     ss = calc_stress_spikes(df)
     if not ss.empty:
@@ -741,7 +742,7 @@ def render_advanced_analytics(df: pd.DataFrame):
     st.divider()
 
     # ── 10. Correlation Matrix ──────────────────────────────
-    st.markdown("### 🔗 Matriz de Correlación")
+    st.markdown("### Matriz de Correlación")
     st.caption("Qué métricas impactan más el bienestar de tu equipo. Más cercano a 1 o -1 = mayor relación.")
     corr = df[["fatigue", "doms", "stress", "sleep", "wellness"]].corr()
     corr.index   = ["Fatiga", "DOMS", "Estrés", "Sueño", "Bienestar"]
@@ -830,22 +831,22 @@ def calc_lag_correlation(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def render_insights(df: pd.DataFrame):
-    st.markdown("## 🔍 Insights del Plantel")
+    st.markdown("## Insights del Plantel")
     df = compute_readiness(df)
 
     # ════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 📡 Sección 1 — Monitoreo del Plantel")
+    st.markdown("## Sección 1 — Monitoreo del Plantel")
     st.markdown("---")
 
     # 1a. Days since last entry
-    st.markdown("### 🗓️ Días Desde el Último Registro")
+    st.markdown("### Días Desde el Último Registro")
     st.caption("Jugadores que llevan más días sin registrar su bienestar. Posible lesión, ausencia o falta de adherencia.")
     dsl = calc_days_since_last_entry(df)
     missing = dsl[dsl["Días Sin Registro"] >= 3]
     c1, c2 = st.columns(2)
-    with c1: metric_card("Sin Registro +3 días", str(len(missing)), RED if len(missing) > 0 else GREEN, "📵")
-    with c2: metric_card("Registraron Hoy", str((dsl["Días Sin Registro"] == 0).sum()), CYAN, "✅")
+    with c1: metric_card("Sin Registro +3 días", str(len(missing)), RED if len(missing) > 0 else GREEN)
+    with c2: metric_card("Registraron Hoy", str((dsl["Días Sin Registro"] == 0).sum()), CYAN)
     st.markdown("<br>", unsafe_allow_html=True)
     fig_dsl = px.bar(dsl.head(20), x="Días Sin Registro", y="Jugador", orientation="h",
                      color="Días Sin Registro",
@@ -861,16 +862,16 @@ def render_insights(df: pd.DataFrame):
     st.divider()
 
     # 1b. Wellness ranking
-    st.markdown("### 🏅 Ranking de Bienestar del Plantel")
+    st.markdown("### Ranking de Bienestar del Plantel")
     st.caption("Clasifica a los jugadores en Top 25%, Medio 50% y Bottom 25% según su bienestar promedio histórico.")
     wr = calc_wellness_ranking(df)
     top   = wr[wr["Ranking"].str.contains("Top")]
     mid   = wr[wr["Ranking"].str.contains("Medio")]
     bot   = wr[wr["Ranking"].str.contains("Bottom")]
     r1, r2, r3 = st.columns(3)
-    with r1: metric_card("Top 25%",    str(len(top)), GREEN,  "🥇")
-    with r2: metric_card("Medio 50%",  str(len(mid)), YELLOW, "🥈")
-    with r3: metric_card("Bottom 25%", str(len(bot)), RED,    "🥉")
+    with r1: metric_card("Top 25%",    str(len(top)), GREEN)
+    with r2: metric_card("Medio 50%",  str(len(mid)), YELLOW)
+    with r3: metric_card("Bottom 25%", str(len(bot)), RED)
     st.markdown("<br>", unsafe_allow_html=True)
     fig_wr = px.bar(wr, x="Bienestar Promedio", y="Jugador", orientation="h",
                     color="Bienestar Promedio",
@@ -885,7 +886,7 @@ def render_insights(df: pd.DataFrame):
     st.divider()
 
     # 1c. % days in alert
-    st.markdown("### 🚨 Porcentaje de Días en Alerta por Jugador")
+    st.markdown("### Porcentaje de Días en Alerta por Jugador")
     st.caption("Qué porcentaje del tiempo total cada jugador estuvo con bienestar ≥ 5.")
     pa = calc_pct_alert(df)
     fig_pa = px.bar(pa, x="% Días en Alerta", y="Jugador", orientation="h",
@@ -899,10 +900,10 @@ def render_insights(df: pd.DataFrame):
 
     # ════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 🔮 Sección 2 — Predicciones")
+    st.markdown("## Sección 2 — Predicciones")
     st.markdown("---")
 
-    st.markdown("### 📈 Predicción de Bienestar para Mañana")
+    st.markdown("### Predicción de Bienestar para Mañana")
     st.caption("Basado en el promedio de los últimos 5 días y la tendencia reciente de cada jugador. Referencial, no determinístico.")
     pred = predict_next_day(df)
     if not pred.empty:
@@ -910,9 +911,9 @@ def render_insights(df: pd.DataFrame):
         good_pred = (pred["Predicción Mañana"] <= 3.5).sum()
         warn_pred = ((pred["Predicción Mañana"] > 3.5) & (pred["Predicción Mañana"] <= 5)).sum()
         bad_pred  = (pred["Predicción Mañana"] > 5).sum()
-        with c1: metric_card("Predicción Buena", str(good_pred), GREEN,  "✅")
-        with c2: metric_card("Predicción Regular", str(warn_pred), YELLOW, "⚠️")
-        with c3: metric_card("Predicción Alerta", str(bad_pred), RED,   "🚨")
+        with c1: metric_card("Predicción Buena",   str(good_pred), GREEN)
+        with c2: metric_card("Predicción Regular", str(warn_pred), YELLOW)
+        with c3: metric_card("Predicción Alerta",  str(bad_pred),  RED)
         st.markdown("<br>", unsafe_allow_html=True)
         fig_pred = px.bar(pred, x="Predicción Mañana", y="Jugador", orientation="h",
                           color="Predicción Mañana",
@@ -929,10 +930,10 @@ def render_insights(df: pd.DataFrame):
 
     # ════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## ⚔️ Sección 3 — Comparación de Jugadores")
+    st.markdown("## Sección 3 — Comparación de Jugadores")
     st.markdown("---")
 
-    st.markdown("### 🔄 Comparación Entre Dos Jugadores")
+    st.markdown("### Comparación Entre Dos Jugadores")
     players = sorted(df["player"].dropna().unique())
     col1, col2 = st.columns(2)
     with col1: p1 = st.selectbox("Jugador 1", players, key="cmp1")
@@ -958,11 +959,11 @@ def render_insights(df: pd.DataFrame):
 
     # ════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 📊 Sección 4 — Patrones del Equipo")
+    st.markdown("## Sección 4 — Patrones del Equipo")
     st.markdown("---")
 
     # Fatigue cycle
-    st.markdown("### 🔄 Ciclo de Fatiga Semanal del Equipo")
+    st.markdown("### Ciclo de Fatiga Semanal del Equipo")
     st.caption("¿Hay semanas de mayor carga donde la fatiga pica consistentemente? Útil para planificar microciclos.")
     fc = calc_fatigue_cycle(df)
     fc_m = fc.melt(id_vars="week_label", var_name="Métrica", value_name="Promedio")
@@ -987,7 +988,7 @@ def render_insights(df: pd.DataFrame):
     st.divider()
 
     # Worst day
-    st.markdown("### 📉 Peor Día Histórico por Jugador")
+    st.markdown("### Peor Día Histórico por Jugador")
     st.caption("El día en que cada jugador registró su mayor puntuación de bienestar (recuerda: mayor = peor).")
     worst = df.loc[df.groupby("player")["wellness"].idxmax()][["player","date","wellness"]].copy()
     worst.columns = ["Jugador","Fecha Peor Día","Peor Score"]
@@ -1008,7 +1009,7 @@ def render_insights(df: pd.DataFrame):
     st.divider()
 
     # Distribution
-    st.markdown("### 📊 Distribución de Scores de Bienestar")
+    st.markdown("### Distribución de Scores de Bienestar")
     st.caption("¿Cómo se distribuyen los registros del equipo? ¿Más días buenos o malos?")
     fig_hist = px.histogram(df, x="wellness", nbins=14,
                              color_discrete_sequence=[CYAN],
@@ -1020,7 +1021,7 @@ def render_insights(df: pd.DataFrame):
     st.divider()
 
     # Weekend syndrome
-    st.markdown("### 📅 Síndrome de Inicio de Semana")
+    st.markdown("### Síndrome de Inicio de Semana")
     st.caption("¿Los lunes el equipo llega con más DOMS y estrés que el resto de la semana?")
     day_map = {"Monday":"Lunes","Tuesday":"Martes","Wednesday":"Miércoles",
                "Thursday":"Jueves","Friday":"Viernes","Saturday":"Sábado","Sunday":"Domingo"}
@@ -1039,17 +1040,17 @@ def render_insights(df: pd.DataFrame):
 
     # ════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 🔗 Sección 5 — Relaciones entre Métricas")
+    st.markdown("## Sección 5 — Relaciones entre Métricas")
     st.markdown("---")
 
     # Lag correlation
-    st.markdown("### ⏱️ ¿El Estrés de Hoy Predice la Fatiga de Mañana?")
+    st.markdown("### ¿El Estrés de Hoy Predice la Fatiga de Mañana?")
     st.caption("Correlación entre el estrés de un día y la fatiga del día siguiente por jugador. Cercano a 1 = el estrés hoy predice más fatiga mañana.")
     lc = calc_lag_correlation(df)
     if not lc.empty:
         high_corr = lc[lc["Correlación Estrés→Fatiga (día+1)"] >= 0.4]
         metric_card("Jugadores con Alta Correlación Estrés→Fatiga",
-                    str(len(high_corr)), ORANGE, "⚡")
+                    str(len(high_corr)), ORANGE)
         st.markdown("<br>", unsafe_allow_html=True)
         fig_lc = px.bar(lc, x="Correlación Estrés→Fatiga (día+1)", y="Jugador", orientation="h",
                         color="Correlación Estrés→Fatiga (día+1)",
@@ -1065,7 +1066,7 @@ def render_insights(df: pd.DataFrame):
     st.divider()
 
     # Full correlation heatmap per metric pair
-    st.markdown("### 🔗 Correlaciones Cruzadas de Todas las Métricas")
+    st.markdown("### Correlaciones Cruzadas de Todas las Métricas")
     st.caption("Qué pasa con una métrica cuando otra sube. Rojo = mueven juntas, Azul = se mueven opuesto.")
     corr_full = df[["fatigue","doms","stress","sleep","wellness","readiness","recovery"]].corr()
     corr_full.index   = ["Fatiga","DOMS","Estrés","Sueño","Bienestar","Preparación","Recuperación"]
@@ -1107,11 +1108,11 @@ def main():
     """, unsafe_allow_html=True)
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Panel del Equipo",
-        "👤 Perfil del Jugador",
-        "🔋 Recuperación y Preparación",
-        "🧠 Análisis Avanzado",
-        "🔍 Insights del Plantel",
+        "Panel del Equipo",
+        "Perfil del Jugador",
+        "Recuperación y Preparación",
+        "Análisis Avanzado",
+        "Insights del Plantel",
     ])
 
     with tab1:
