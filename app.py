@@ -476,14 +476,15 @@ def main():
     <div style="background:linear-gradient(135deg,#0d2137 0%,#1a3a5c 50%,#0d2137 100%);
                 border-radius:16px;padding:28px 36px;margin-bottom:24px;
                 border:1px solid #1e4976;box-shadow:0 8px 32px rgba(0,212,255,0.1);">
-        <div style="display:flex;align-items:center;gap:16px;">
-            <div style="font-size:48px;">⚽</div>
+        <div style="display:flex;align-items:center;gap:20px;">
+            <img src="https://tmssl.akamaized.net//images/wappen/head/70466.png?lm=1735917818"
+                 style="height:80px;width:auto;filter:drop-shadow(0 0 12px rgba(0,212,255,0.4));">
             <div>
                 <div style="color:white;font-size:28px;font-weight:900;letter-spacing:1px;">
-                    Panel de Bienestar del Jugador
+                    Leones del Norte FC
                 </div>
                 <div style="color:#00d4ff;font-size:13px;font-weight:600;letter-spacing:2px;margin-top:4px;">
-                    MONITOREO EN TIEMPO REAL · RECUPERACIÓN · PREPARACIÓN
+                    PANEL DE BIENESTAR · RECUPERACIÓN · PREPARACIÓN
                 </div>
             </div>
         </div>
